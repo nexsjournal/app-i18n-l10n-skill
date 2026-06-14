@@ -2,7 +2,7 @@
 
 本目录展示如何将 [app-i18n-l10n-skill](../../README.md) 接入真实 iOS 项目。
 
-对应仓库：[altitudeshot](https://github.com/YOUR_USER/altitudeshot)（路径示例）
+对应仓库：[altitudeshot](https://github.com/nexsjournal/altitudeshot)（路径示例）
 
 ## 使用方式
 
