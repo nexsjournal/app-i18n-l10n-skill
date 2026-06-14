@@ -1,0 +1,73 @@
+# l10n.profile.yaml — 项目本地化配置模板
+# 复制到 App 仓库：.l10n/profile.yaml
+
+platform: ios-swift
+
+app:
+  name: MyApp                    # 对外品牌名
+  bundle_id: com.example.myapp
+  marketing_name_key: app_marketing_name   # xcstrings 中的桌面营销名 key（可选）
+  tone: concise                  # 翻译语气：concise | friendly | formal
+  category: ""                   # 品类，供 ASO 参考
+  tagline: ""                    # 一句话定位
+  brand_terms:                   # 翻译时保持一致
+    - Pro
+  pro_product_name: ""           # 如 Altitude Shot Pro
+
+ios:
+  string_catalog: MyApp/Resources/Localizable.xcstrings
+  language_enum: MyApp/Models/AppLanguage.swift
+  language_settings_view: ""     # 可选
+  language_tests: MyAppTests/AppLanguageTests.swift
+  xcodeproj: MyApp.xcodeproj/project.pbxproj
+  info_plist_strings_dir: MyApp  # 其下为 {locale}.lproj/InfoPlist.strings
+  info_plist_keys:
+    - CFBundleDisplayName
+    - CFBundleName
+    - NSCameraUsageDescription
+    - NSLocationWhenInUseUsageDescription
+    - NSPhotoLibraryAddUsageDescription
+  source_dir: MyApp              # 硬编码扫描根目录
+  scheme: MyApp
+  language_settings_order: follow_system_first  # 或 alphabetical
+  user_defaults_language_key: app_language
+
+store:
+  apple:
+    app_store_connect_language: ""  # 由 skill 按 BCP-47 映射填写
+    privacy_policy_url: https://example.com/privacy
+    terms_url: https://example.com/terms
+    metadata_reference: ""          # 已有主 metadata 文档路径（可选）
+    aso_seed_terms: []              # ASO 种子词，如 [GPS, hiking, altitude]
+    description_sections:
+      value_proposition: true
+      core_features: 6
+      target_audience: 3
+      legal_links: true
+    screenshots:
+      count: 6
+      themes: []                    # 留空则由 agent 从产品文档推断
+      multilingual_slide_index: 6   # 「多语界面」通常是最后一张
+
+deliverables:
+  metadata_dir: docs/localization
+  translations_dir: .l10n/translations   # JSON 翻译文件存放（可选）
+
+audit:
+  sources:
+    - string_catalog
+    - info_plist_strings
+    - hardcoded_swift
+    - language_enum
+    - language_tests
+    - xcode_known_regions
+
+verification:
+  test_command: >
+    xcodebuild test -scheme MyApp
+    -destination 'platform=iOS Simulator,name=iPhone 16'
+    -only-testing:MyAppTests/AppLanguageTests
+
+existing_locales:
+  - en
+  # - zh-Hans

@@ -1,0 +1,26 @@
+# AltitudeNow 品牌术语（可选）
+# Agent 翻译时必须遵守
+
+terms:
+  keep_english:
+    - Pro
+    - Pin
+    - GPS
+    - AltitudeNow
+    - O₂
+
+  localized:
+    Mountain Passport:
+      zh-Hans: 山峰护照
+      zh-Hant: 山峰護照
+      en: Mountain Passport
+      ja: マウンテンパスポート
+      ko: 마운틴 패스포트
+      fr: Passeport Montagne
+    Altitude Shot Pro:
+      zh-Hans: Altitude Shot Pro
+      zh-Hant: Altitude Shot Pro
+      en: Altitude Shot Pro
+      ja: Altitude Shot Pro
+      ko: Altitude Shot Pro
+      fr: Altitude Shot Pro

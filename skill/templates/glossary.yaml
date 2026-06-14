@@ -1,0 +1,33 @@
+# glossary.yaml — 品牌术语锁定（可选）
+# 复制到 App 仓库：.l10n/glossary.yaml
+# Agent 翻译时必须遵守；未列出词按目标语言自然翻译
+
+terms:
+  # 保留英文不译
+  keep_english:
+    - Pro
+    - Pin
+    - GPS
+    - Apple Watch
+    - iPhone
+    - Bundle ID
+
+  # 各语言官方译名（key = BCP-47 或 logical name）
+  localized:
+    Mountain Passport:
+      zh-Hans: 山峰护照
+      zh-Hant: 山峰護照
+      ja: マウンテンパスポート
+      ko: 마운틴 패스포트
+      fr: Passeport Montagne
+    Altitude Shot Pro:
+      zh-Hans: Altitude Shot Pro
+      ja: Altitude Shot Pro
+      ko: Altitude Shot Pro
+      fr: Altitude Shot Pro
+
+  # 禁止误译
+  do_not_use:
+    - term: passport
+      wrong_in_zh-Hans: ["护照证件", "通关护照"]
+      note: 产品功能名固定为「山峰护照」

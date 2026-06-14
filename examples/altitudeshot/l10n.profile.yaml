@@ -1,0 +1,106 @@
+# AltitudeNow（实时海拔计）· 项目本地化配置
+# 复制来源：app-i18n-l10n-skill/examples/altitudeshot/
+
+platform: ios-swift
+
+app:
+  name: AltitudeNow
+  bundle_id: com.leining.altitudeshot
+  marketing_name_key: app_marketing_name
+  tone: concise
+  category: 轻户外 / 旅行打卡 / 地点成就记录
+  tagline: 把「到达这一刻」变成一张值得分享、可收藏的登顶卡片
+  brand_terms:
+    - AltitudeNow
+    - Altitude Shot Pro
+    - Pro
+    - Pin
+    - Mountain Passport
+    - 山峰护照
+    - マウンテンパスポート
+    - Passeport Montagne
+  pro_product_name: Altitude Shot Pro
+
+ios:
+  string_catalog: altitudeshot/Resources/Localizable.xcstrings
+  language_enum: altitudeshot/Models/AppLanguage.swift
+  language_settings_view: altitudeshot/Features/Settings/LanguageSettingsView.swift
+  language_tests: altitudeshotTests/AppLanguageTests.swift
+  xcodeproj: altitudeshot.xcodeproj/project.pbxproj
+  info_plist_strings_dir: altitudeshot
+  info_plist_keys:
+    - CFBundleDisplayName
+    - CFBundleName
+    - NSCameraUsageDescription
+    - NSLocationWhenInUseUsageDescription
+    - NSMotionUsageDescription
+    - NSPhotoLibraryAddUsageDescription
+  source_dir: altitudeshot
+  scheme: altitudeshot
+  language_settings_order: follow_system_first
+  user_defaults_language_key: app_language
+
+store:
+  apple:
+    app_store_product_id: "6773985059"
+    privacy_policy_url: https://nexsjournal.github.io/altitudeshot-terms/privacy-policy.html
+    terms_url: https://nexsjournal.github.io/altitudeshot-terms/terms-of-service.html
+    metadata_reference: docs/proj_refer/2.4-App Store Connect元数据与宣传文案.md
+    aso_seed_terms:
+      - 海拔
+      - GPS
+      - 指南针
+      - 轨迹
+      - 登山
+      - 露营
+      - 打卡
+      - 护照
+      - 模板
+      - altimeter
+      - hiking
+      - compass
+    description_sections:
+      value_proposition: true
+      core_features: 6
+      target_audience: 3
+      legal_links: true
+    screenshots:
+      count: 6
+      themes:
+        - 品牌主张 / 定格瞬间
+        - 实时海拔 / GPS·气压·经纬度
+        - 轨迹跟踪
+        - 登顶模板
+        - 山峰护照
+        - 多语界面
+      multilingual_slide_index: 6
+      brand_colors:
+        accent: "#B7FF5A"
+        background: "#0B1110"
+
+deliverables:
+  metadata_dir: docs/localization
+  translations_dir: scripts
+
+audit:
+  sources:
+    - string_catalog
+    - info_plist_strings
+    - hardcoded_swift
+    - language_enum
+    - language_tests
+    - xcode_known_regions
+
+verification:
+  test_command: >
+    xcodebuild test -scheme altitudeshot
+    -destination 'platform=iOS Simulator,name=iPhone 16'
+    -only-testing:altitudeshotTests/AppLanguageTests
+
+existing_locales:
+  - zh-Hans
+  - zh-Hant
+  - en
+  - ja
+  - ko
+  - fr
