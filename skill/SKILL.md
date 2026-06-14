@@ -27,13 +27,15 @@ iOS 接入细节：[platforms/ios-swift.md](platforms/ios-swift.md)
 ```
 - [ ] 0. 加载 l10n.profile.yaml
 - [ ] 1. 解析目标语言（BCP-47 / 商店语言名 / 枚举 case）
-- [ ] 2. 审计待翻译字符串
+- [ ] 2. 审计待翻译字符串（含持久化数据与 SwiftUI 运行时）
 - [ ] 3. 应用内翻译与工程接入
+- [ ] 3.5 运行时接入审计（持久化 key、SwiftUI 刷新、Environment locale）
 - [ ] 4. 生成商店元数据（App Store Connect）
 - [ ] 5. 生成宣传截图文案
 - [ ] 6. 校验字符限制
 - [ ] 7. 输出交付文档
 - [ ] 8. 同步已有语言（语言列表、截图 #N 多语屏）
+- [ ] 9. 切换语言冒烟（标题、Tab、默认数据、设置页）
 ```
 
 ### 1. 解析目标语言
@@ -56,6 +58,8 @@ iOS 接入细节：[platforms/ios-swift.md](platforms/ios-swift.md)
 | String Catalog | `*.xcstrings` |
 | InfoPlist 字符串 | `{target}/{locale}.lproj/InfoPlist.strings` |
 | 硬编码 | `Text("…")` / `Label("…")` / 中文正则 |
+| 持久化展示文案 | `UserDefaults` / `@AppStorage` / 默认种子数组 |
+| SwiftUI 运行时 | `.navigationTitle` / 未注入 `\.locale` / 缺 `.id(appLanguage)` |
 | 语言枚举 | `*Language*.swift` |
 | 测试 | `*Language*Tests*` |
 | Xcode | `project.pbxproj` → `knownRegions` |
@@ -65,9 +69,16 @@ iOS 接入细节：[platforms/ios-swift.md](platforms/ios-swift.md)
 ```bash
 python3 <skill-root>/scripts/audit_catalog.py --catalog <xcstrings-path>
 python3 <skill-root>/scripts/export_catalog_keys.py --catalog <xcstrings-path> -o /tmp/keys.json
+python3 <skill-root>/scripts/audit_runtime_l10n.py --source-dir <ios.source_dir>
 ```
 
-交付文档 §0 写入：key 总数、缺失 locale 数、硬编码清单、待改文件列表。
+**持久化数据规则**（见 [reference.md § 持久化数据本地化](reference.md#持久化数据本地化)）：
+
+- 持久化层只存 **stable id** 或 **localization key**（如 `habit.reading`），**禁止**存已翻译的展示文案（如 `"阅读"` / `"Reading"`）
+- 展示时再按当前 locale 解析 key
+- 若已有用户数据存的是旧 locale 文案 → 列出迁移映射，建议一次性 migration（skill **检测 + 给出模式**，不 silent 改用户数据）
+
+交付文档 §0 写入：key 总数、缺失 locale 数、硬编码清单、**持久化数据风险**、**SwiftUI 刷新风险**、待改文件列表。
 
 ### 3. 工程接入
 
@@ -95,6 +106,26 @@ python3 <skill-root>/scripts/apply_locale_localizations.py \
 labels JSON 格式：`{ "en": "Japanese", "ja": "日本語", "zh-Hans": "日语", ... }`
 
 完成后运行 profile 中 `verification.test_command`（若有）。
+
+### 3.5 运行时接入审计
+
+**当 `ios.has_in_app_language_switch: true`（或探测到 AppLanguage / 语言设置页）时必做。**
+
+严格按 [platforms/ios-swift.md §9](platforms/ios-swift.md#9-swiftui-应用内语言切换)。
+
+检查并修复（或列入交付文档「需开发者确认」）：
+
+1. **持久化层**：默认种子 / UserDefaults 是否存了展示文案 → 改为 catalog key + 可选 migration
+2. **SwiftUI 刷新**：`.navigationTitle("key")` 切换语言后不更新 → `String(localized:locale:)` + 根视图 `.id(appLanguage)`
+3. **Environment**：根节点是否注入 `.environment(\.locale, resolvedLocale)`
+
+再次运行：
+
+```bash
+python3 <skill-root>/scripts/audit_runtime_l10n.py --source-dir <ios.source_dir>
+```
+
+交付文档 §6「运行时本地化」逐项勾选；有未修复项须明确标注，**不得**仅因 catalog 完整就宣称本地化完成。
 
 ### 4. App Store Connect 元数据
 
@@ -155,6 +186,19 @@ python3 <skill-root>/scripts/validate_metadata.py \
 - 各 locale 的 `settings_language_*` 补新语言名
 - 更新各语言 metadata 中截图「多语界面」列表
 - 可选：更新 `profile.store.apple.metadata_reference` 主文档
+
+### 9. 切换语言冒烟
+
+catalog 完整 ≠ UI 正确。完成 §3.5 后，在交付文档或汇报中明确写出切换至目标 locale 时的预期表现：
+
+| 检查项 | 预期 |
+|--------|------|
+| 导航标题 / Tab 标签 | 立即显示目标语言（无需重启 App） |
+| 默认种子数据（习惯、分类等） | 显示目标语言，非旧 locale 文案 |
+| 设置页语言名 | 各语言自称正确 |
+| 权限弹窗 | InfoPlist.strings 为目标语言 |
+
+有模拟器时实际切换验证；否则基于代码审计给出「通过 / 待修复」及具体文件。
 
 ---
 

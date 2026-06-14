@@ -14,6 +14,8 @@
 | String Catalog 翻译 key | {key_count} |
 | InfoPlist.strings | `{info_plist_path}` |
 | 硬编码 UI 字符串 | {hardcoded_summary} |
+| 持久化数据风险 | {persisted_data_summary} |
+| SwiftUI 运行时风险 | {swiftui_runtime_summary} |
 
 ---
 
@@ -116,3 +118,17 @@
 | 文件 | 变更 |
 |------|------|
 | | |
+
+---
+
+## 6. 运行时本地化（需人工验证）
+
+> catalog 完整 ≠ UI 正确。有应用内语言切换时逐项确认。
+
+| 检查项 | 状态 | 备注 |
+|--------|------|------|
+| 导航标题随语言刷新 | ☐ | `.id(appLanguage)` + `String(localized:locale:)` |
+| Tab / 核心流程文案随语言刷新 | ☐ | |
+| 持久化数据用 key 非展示文案 | ☐ | 习惯、分类、标签等 |
+| 旧数据 migration | ☐ | 旧 locale 文案 → catalog key |
+| 冷启动 + 切换语言各测一次 | ☐ | |

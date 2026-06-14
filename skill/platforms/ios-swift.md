@@ -75,7 +75,7 @@ labels JSON 示例：
 | String Catalog | `Localizable.xcstrings` |
 | legacy strings | `*.lproj/Localizable.strings` — 需按 key 文件逐条追加 |
 | SwiftUI + enum | `AppLanguage` + `LocalizedStringKey` |
-| 仅系统语言 | 无 in-app 切换 — 跳过 §3，仅 catalog + knownRegions |
+| 仅系统语言 | 无 in-app 切换 — 跳过 §3、§9，仅 catalog + knownRegions |
 
 legacy `.strings` 项目：用 `genstrings` 或 Xcode Export 流程，本 skill 脚本仅直接支持 xcstrings（v1）。
 
@@ -84,5 +84,80 @@ legacy `.strings` 项目：用 `genstrings` 或 Xcode Export 流程，本 skill 
 - [ ] 设置页出现新语言且名称正确
 - [ ] 切换后 Tab / 核心流程文案为目标语言
 - [ ] 权限弹窗（InfoPlist.strings）为目标语言
+- [ ] **切换语言后 navigationTitle / Tab 标签立即更新（无需重启）**
+- [ ] **UserDefaults / 默认种子数据随语言切换显示正确翻译（非旧 locale 文案）**
+- [ ] **冷启动 + 应用内切换语言各测一次**
 - [ ] 单元测试通过
 - [ ] `audit_catalog.py` 无 missing locale
+- [ ] `audit_runtime_l10n.py` 无 WARN（或已列入交付文档待修复项）
+
+## 9. SwiftUI 应用内语言切换
+
+> **何时必查**：`ios.has_in_app_language_switch: true`，或项目有 `AppLanguage` / 语言设置页 / 非系统 `resolvedLocale`。
+
+catalog 有翻译，但 UI 仍显示旧语言，通常是 **消费链** 问题，不是 catalog 问题。
+
+### 反模式
+
+| 反模式 | 后果 |
+|--------|------|
+| 默认习惯/分类数组存 `["阅读", "运动"]` | 切换语言后仍显示中文 |
+| `UserDefaults` 写入已翻译展示文案 | 持久化层绑定某一 locale |
+| `.navigationTitle("app.name")` 仅传 key | SwiftUI 切换语言后标题可能不刷新 |
+| `Text(savedDisplayString)` 直接显示持久化字符串 | 不随 locale 变化 |
+| 只改 catalog，根视图未注入 `\.locale` | 部分组件仍用系统语言 |
+
+### 推荐模式
+
+**1. 持久化层只存 key 或 stable id**
+
+```swift
+// ❌ 反模式
+let defaultHabits = ["阅读", "运动", "冥想", "早睡"]
+
+// ✅ 推荐
+let defaultHabitKeys = ["habit.reading", "habit.exercise", "habit.meditation", "habit.early_sleep"]
+
+// 展示时解析
+func displayName(for key: String, locale: Locale) -> String {
+    String(localized: String.LocalizationValue(key), locale: locale)
+}
+```
+
+**2. 旧数据一次性迁移**
+
+若已有用户数据存的是某 locale 的展示文案，提供 migration（启动时或版本升级）：
+
+```swift
+// 旧中文 → catalog key 映射；映射表仅用于 migration，不进 skill 正文
+let legacyNameToKey = ["阅读": "habit.reading", "运动": "habit.exercise", ...]
+```
+
+skill 职责：**检测**需迁移的字段并给出映射建议；**不** silent 改写用户数据。
+
+**3. 显式 locale 取串 + 强制刷新视图树**
+
+```swift
+// 显式按当前 app 语言取标题
+.navigationTitle(
+    String(localized: String.LocalizationValue("app.name"), locale: settings.resolvedLocale)
+)
+
+// 语言变更时强制重建视图（挂在 NavigationStack / TabView 根节点）
+.id(settings.appLanguage)
+
+// 根节点注入 locale
+.environment(\.locale, settings.resolvedLocale)
+```
+
+**4. 优先复用项目已有 L10n 封装**
+
+若已有 `AppLocalization.string(_:)` 或等价 API，扩展它而非新建平行体系。
+
+### 审计命令
+
+```bash
+python3 <skill-root>/scripts/audit_runtime_l10n.py --source-dir <ios.source_dir>
+```
+
+详见 [reference.md § 持久化数据本地化](../reference.md#持久化数据本地化)。

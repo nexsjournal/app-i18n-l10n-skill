@@ -95,6 +95,78 @@ rg 'android:text="[^@]' --glob '*.xml'
 
 ---
 
+## 持久化数据本地化
+
+**原则**：持久化层（UserDefaults、`@AppStorage`、Core Data、JSON 文件、默认种子数组）只存 **stable id** 或 **localization key**，禁止存某一 locale 的展示文案。
+
+### 典型反例
+
+```swift
+// ❌ 首次启动写入已翻译文案 — 切换语言后 UI 仍显示旧语言
+UserDefaults.standard.set(["阅读", "运动", "冥想", "早睡"], forKey: "default_habits")
+```
+
+```swift
+// ✅ 存 key，展示时再本地化
+UserDefaults.standard.set(
+    ["habit.reading", "habit.exercise", "habit.meditation", "habit.early_sleep"],
+    forKey: "default_habits"
+)
+```
+
+### 审计命令
+
+```bash
+# UserDefaults / AppStorage 附近字面量
+rg 'UserDefaults|@AppStorage|\.set\(|\.string\(forKey' --glob '*.swift' <source_dir>
+
+# 默认种子 / 初始数据里的 CJK 或硬编码数组
+rg '\["[\u4e00-\u9fff]|defaultHabits|seedData|initialData|default.*=\s*\[' --glob '*.swift' <source_dir>
+
+# 自动化审计（推荐）
+python3 <skill-root>/scripts/audit_runtime_l10n.py --source-dir <source_dir>
+```
+
+### 旧数据迁移
+
+若检测到已有用户数据存的是展示文案：
+
+1. 建立 **旧文案 → catalog key** 映射表（项目特有，写在 app migration 代码里）
+2. 启动或版本升级时一次性迁移
+3. 交付文档 §6 标注迁移范围与状态
+
+skill **只检测 + 给出修复模式**，不自动改写用户数据。
+
+---
+
+## SwiftUI 运行时本地化
+
+**何时适用**：`ios.has_in_app_language_switch: true` 或存在应用内语言切换。
+
+### 常见问题
+
+| 现象 | 原因 | 修复方向 |
+|------|------|----------|
+| catalog 有 `app.name` 但标题不随语言变 | `.navigationTitle("app.name")` 不刷新 | `String(localized:locale:)` + `.id(appLanguage)` |
+| 习惯/分类名切换语言不变 | 持久化层存了旧 locale 文案 | 改存 key + migration |
+| 部分 Text 仍用系统语言 | 未注入 `\.locale` | 根视图 `.environment(\.locale, resolvedLocale)` |
+
+### 审计命令
+
+```bash
+# navigationTitle / tabItem 直接用 key 字面量
+rg 'navigationTitle\("|\.tabItem|Tab\("[^"]+"\)' --glob '*.swift' <source_dir>
+
+# 是否注入 locale / 强制刷新
+rg '\.environment\(\\\.locale|\.id\(.*[Ll]anguage' --glob '*.swift' <source_dir>
+
+python3 <skill-root>/scripts/audit_runtime_l10n.py --source-dir <source_dir>
+```
+
+详见 [platforms/ios-swift.md §9](platforms/ios-swift.md#9-swiftui-应用内语言切换)。
+
+---
+
 ## l10n.profile.yaml 字段说明
 
 见 [templates/l10n.profile.yaml](templates/l10n.profile.yaml) 内注释。
@@ -106,6 +178,8 @@ rg 'android:text="[^@]' --glob '*.xml'
 | `platform` | `ios-swift`（v1） |
 | `ios.string_catalog` | Localizable.xcstrings 路径 |
 | `ios.language_enum` | AppLanguage.swift 路径 |
+| `ios.has_in_app_language_switch` | 是否有应用内语言切换（触发 SwiftUI §9 检查） |
+| `ios.user_defaults_keys` | 已知存用户数据的 UserDefaults key（可选，辅助审计） |
 | `ios.info_plist_strings_dir` | `.lproj` 父目录 |
 | `app.brand_terms` | ASO / 翻译术语 |
 | `store.apple.*` | 元数据与截图配置 |

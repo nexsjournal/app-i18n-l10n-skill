@@ -70,6 +70,7 @@ app-i18n-l10n-skill/
 │   ├── validate_metadata.py
 │   ├── apply_locale_localizations.py
 │   ├── audit_catalog.py
+│   ├── audit_runtime_l10n.py
 │   └── export_catalog_keys.py
 └── examples/
     └── altitudeshot/           # 真实项目配置示例
@@ -83,6 +84,9 @@ python3 scripts/validate_metadata.py --file docs/localization/ja-app-store-metad
 
 # 审计 xcstrings 各 locale 完整度
 python3 scripts/audit_catalog.py --catalog path/to/Localizable.xcstrings
+
+# 审计 SwiftUI 运行时本地化（持久化 key、标题刷新等）
+python3 scripts/audit_runtime_l10n.py --source-dir path/to/MyApp
 
 # 导出 key 清单（供翻译）
 python3 scripts/export_catalog_keys.py --catalog path/to/Localizable.xcstrings -o keys.json
