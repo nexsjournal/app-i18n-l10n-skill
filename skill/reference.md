@@ -141,21 +141,44 @@ skill **只检测 + 给出修复模式**，不自动改写用户数据。
 
 ## SwiftUI 运行时本地化
 
-**何时适用**：`ios.has_in_app_language_switch: true` 或存在应用内语言切换。
+**何时适用**：`ios.localization_strategy: in_app_switch` 或 `has_in_app_language_switch: true`。
+
+### 仅 catalog ≠ 应用内可切换
+
+| 现象 | 原因 |
+|------|------|
+| 只有改系统语言才变 | 未实现 `AppLanguage` + 设置页；仅完成 catalog |
+| 设置里选了英文，部分仍是中文 | 消费链未接好（见三层） |
+
+### 三层消费链
+
+| 层 | 现象 | 修复 |
+|----|------|------|
+| **L1** | `Text("key")`、`Toggle("key")` 不跟应用语言 | 切换时写 `UserDefaults` → `AppleLanguages` |
+| **L2** | 心情名、习惯名、导出句不变 | `AppLocalization` + 模型 `displayName` 走动态 key；Bundle `.lproj` 取串 |
+| **L3** | 日期/星期不对；部分卡片不刷新 | `DateFormatter.locale = resolvedLocale`；子视图 `.id(appLanguage)` |
 
 ### 常见问题
 
 | 现象 | 原因 | 修复方向 |
 |------|------|----------|
-| catalog 有 `app.name` 但标题不随语言变 | `.navigationTitle("app.name")` 不刷新 | `String(localized:locale:)` + `.id(appLanguage)` |
+| catalog 有翻译，Tab 仍旧语言 | `LocalizedStringKey` 不跟 `.environment(\.locale)` | `AppleLanguages`（§9.1） |
+| catalog 有 `mood.happy` 但心情仍中文 | 模型返回硬编码或 `String(localized:locale:)` 读 catalog 失败 | `AppLocalization.string` + Bundle `.lproj` |
+| 首页日期星期仍英文 | `Locale.current` / 未设 formatter locale | 绑 `settings.resolvedLocale` |
 | 习惯/分类名切换语言不变 | 持久化层存了旧 locale 文案 | 改存 key + migration |
-| 部分 Text 仍用系统语言 | 未注入 `\.locale` | 根视图 `.environment(\.locale, resolvedLocale)` |
+| 权限弹窗不跟应用语言 | InfoPlist 跟系统 | 交付文档注明；按需单独处理 |
 
 ### 审计命令
 
 ```bash
-# navigationTitle / tabItem 直接用 key 字面量
-rg 'navigationTitle\("|\.tabItem|Tab\("[^"]+"\)' --glob '*.swift' <source_dir>
+# LocalizedStringKey 使用处
+rg 'Text\("|Toggle\("|Label\("' --glob '*.swift' <source_dir>
+
+# AppleLanguages 是否写入
+rg 'AppleLanguages' --glob '*.swift' <source_dir>
+
+# 模型展示名 / 导出
+rg 'displayName|ExportService|DateFormatter' --glob '*.swift' <source_dir>
 
 # 是否注入 locale / 强制刷新
 rg '\.environment\(\\\.locale|\.id\(.*[Ll]anguage' --glob '*.swift' <source_dir>
@@ -178,7 +201,10 @@ python3 <skill-root>/scripts/audit_runtime_l10n.py --source-dir <source_dir>
 | `platform` | `ios-swift`（v1） |
 | `ios.string_catalog` | Localizable.xcstrings 路径 |
 | `ios.language_enum` | AppLanguage.swift 路径 |
-| `ios.has_in_app_language_switch` | 是否有应用内语言切换（触发 SwiftUI §9 检查） |
+| `ios.localization_strategy` | `system_only`（仅系统语言）或 `in_app_switch`（设置页切换） |
+| `ios.has_in_app_language_switch` | 同 `in_app_switch`；为 true 时触发 §9 检查 |
+| `ios.language_settings_view` | 语言设置 UI 路径（可选） |
+| `ios.localization_helper` | `AppLocalization.swift` 等统一取串封装路径（可选） |
 | `ios.user_defaults_keys` | 已知存用户数据的 UserDefaults key（可选，辅助审计） |
 | `ios.info_plist_strings_dir` | `.lproj` 父目录 |
 | `app.brand_terms` | ASO / 翻译术语 |

@@ -59,7 +59,8 @@ iOS 接入细节：[platforms/ios-swift.md](platforms/ios-swift.md)
 | InfoPlist 字符串 | `{target}/{locale}.lproj/InfoPlist.strings` |
 | 硬编码 | `Text("…")` / `Label("…")` / 中文正则 |
 | 持久化展示文案 | `UserDefaults` / `@AppStorage` / 默认种子数组 |
-| SwiftUI 运行时 | `.navigationTitle` / 未注入 `\.locale` / 缺 `.id(appLanguage)` |
+| SwiftUI 运行时 | `.navigationTitle` / `AppleLanguages` / `AppLocalization` / 缺 `.id(appLanguage)` |
+| 动态展示文案 | 模型 `displayName`、导出格式、`DateFormatter` 未绑 locale |
 | 语言枚举 | `*Language*.swift` |
 | 测试 | `*Language*Tests*` |
 | Xcode | `project.pbxproj` → `knownRegions` |
@@ -70,6 +71,7 @@ iOS 接入细节：[platforms/ios-swift.md](platforms/ios-swift.md)
 python3 <skill-root>/scripts/audit_catalog.py --catalog <xcstrings-path>
 python3 <skill-root>/scripts/export_catalog_keys.py --catalog <xcstrings-path> -o /tmp/keys.json
 python3 <skill-root>/scripts/audit_runtime_l10n.py --source-dir <ios.source_dir>
+# in_app_switch 项目加 --require-in-app-switch
 ```
 
 **持久化数据规则**（见 [reference.md § 持久化数据本地化](reference.md#持久化数据本地化)）：
@@ -83,6 +85,15 @@ python3 <skill-root>/scripts/audit_runtime_l10n.py --source-dir <ios.source_dir>
 ### 3. 工程接入
 
 **iOS** → 严格按 [platforms/ios-swift.md](platforms/ios-swift.md)。
+
+**先确认语言消费模式**（profile `ios.localization_strategy`）：
+
+| 模式 | skill 额外交付 |
+|------|----------------|
+| `system_only` | catalog + InfoPlist + knownRegions；交付文档注明「仅跟随系统语言」 |
+| `in_app_switch` | 上列 + **§3.1 脚手架**（`AppLanguage`、`AppSettings`、`AppLocalization`、设置页语言区块）+ **§9 三层消费链** |
+
+用户未说明且 `existing_locales` ≥ 2 时，**默认建议** `in_app_switch` 并询问是否只需系统语言。
 
 通用原则：
 
@@ -109,20 +120,23 @@ labels JSON 格式：`{ "en": "Japanese", "ja": "日本語", "zh-Hans": "日语"
 
 ### 3.5 运行时接入审计
 
-**当 `ios.has_in_app_language_switch: true`（或探测到 AppLanguage / 语言设置页）时必做。**
+**当 `ios.localization_strategy: in_app_switch`（或 `has_in_app_language_switch: true`）时必做。**
 
-严格按 [platforms/ios-swift.md §9](platforms/ios-swift.md#9-swiftui-应用内语言切换)。
+严格按 [platforms/ios-swift.md §9](platforms/ios-swift.md#9-swiftui-应用内语言切换) **三层消费链**逐项检查：
 
-检查并修复（或列入交付文档「需开发者确认」）：
+| 层 | 检查项 |
+|----|--------|
+| **L1 Bundle** | 切换语言时是否写 `AppleLanguages`（否则 `Text("key")` / `Toggle` 不切换） |
+| **L2 AppLocalization** | 心情/习惯/导出等动态 key 是否走统一取串；持久化是否只存 key |
+| **L3 刷新** | 根 + 关键子视图 `.id(appLanguage)`；日期/数字是否绑 `resolvedLocale` |
 
-1. **持久化层**：默认种子 / UserDefaults 是否存了展示文案 → 改为 catalog key + 可选 migration
-2. **SwiftUI 刷新**：`.navigationTitle("key")` 切换语言后不更新 → `String(localized:locale:)` + 根视图 `.id(appLanguage)`
-3. **Environment**：根节点是否注入 `.environment(\.locale, resolvedLocale)`
+并确认 **§3.1 脚手架** 已交付：设置页有「跟随系统 + 各语言」选项，无需改系统语言即可生效。
 
 再次运行：
 
 ```bash
 python3 <skill-root>/scripts/audit_runtime_l10n.py --source-dir <ios.source_dir>
+# in_app_switch 项目加 --require-in-app-switch
 ```
 
 交付文档 §6「运行时本地化」逐项勾选；有未修复项须明确标注，**不得**仅因 catalog 完整就宣称本地化完成。
@@ -193,10 +207,13 @@ catalog 完整 ≠ UI 正确。完成 §3.5 后，在交付文档或汇报中明
 
 | 检查项 | 预期 |
 |--------|------|
-| 导航标题 / Tab 标签 | 立即显示目标语言（无需重启 App） |
+| 设置页语言选项 | 跟随系统 + 各 locale，选后立即生效 |
+| 导航标题 / Tab 标签 | 立即显示目标语言（**无需改系统语言、无需重启**） |
+| 模型展示名（心情、习惯等） | 随语言变化 |
+| 日期 / 星期格式化 | 与 `resolvedLocale` 一致 |
 | 默认种子数据（习惯、分类等） | 显示目标语言，非旧 locale 文案 |
 | 设置页语言名 | 各语言自称正确 |
-| 权限弹窗 | InfoPlist.strings 为目标语言 |
+| 权限弹窗 | 默认跟系统语言（或按需求单独处理 InfoPlist） |
 
 有模拟器时实际切换验证；否则基于代码审计给出「通过 / 待修复」及具体文件。
 
@@ -224,9 +241,9 @@ catalog 完整 ≠ UI 正确。完成 §3.5 后，在交付文档或汇报中明
 
 **Agent**：
 
-1. 读 `.l10n/profile.yaml`
+1. 读 `.l10n/profile.yaml`，确认 `localization_strategy`
 2. 映射 `ko` · App Store `Korean` · case `korean`
-3. 审计 xcstrings + InfoPlist + 硬编码
-4. 写入翻译、更新 AppLanguage / knownRegions / tests
+3. 审计 xcstrings + InfoPlist + 硬编码 + 运行时三层
+4. 写入翻译；`in_app_switch` 时实现 AppLanguage / 设置页 / AppLocalization / AppleLanguages
 5. 生成 `docs/localization/ko-app-store-metadata.md`
-6. `validate_metadata.py` 通过 → 汇报变更清单
+6. `validate_metadata.py` + `audit_runtime_l10n.py` 通过 → 汇报变更清单

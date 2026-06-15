@@ -29,7 +29,9 @@ ios:
     - NSPhotoLibraryAddUsageDescription
   source_dir: MyApp              # 硬编码扫描根目录
   scheme: MyApp
-  has_in_app_language_switch: false  # true → 启用 SwiftUI 运行时审计（§9）
+  localization_strategy: system_only  # system_only | in_app_switch
+  has_in_app_language_switch: false  # in_app_switch 时设为 true
+  localization_helper: ""          # 如 MyApp/Core/AppLocalization.swift
   user_defaults_keys: []           # 可选：如 [default_habits, user_habits]
   language_settings_order: follow_system_first  # 或 alphabetical
   user_defaults_language_key: app_language
@@ -61,7 +63,8 @@ audit:
     - info_plist_strings
     - hardcoded_swift
     - persisted_localized_strings   # UserDefaults / 默认种子存展示文案
-    - swiftui_runtime_refresh       # 有应用内语言切换时
+    - swiftui_runtime_refresh       # in_app_switch：三层消费链
+    - dynamic_display_strings       # 模型 displayName、导出、日期格式化
     - language_enum
     - language_tests
     - xcode_known_regions

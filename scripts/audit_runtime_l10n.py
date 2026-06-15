@@ -32,9 +32,17 @@ NAV_TITLE_RE = re.compile(r"\.navigationTitle\s*\(\s*\"([^\"]+)\"")
 TAB_RE = re.compile(r"\.tabItem\s*\{|Tab\s*\(\s*\"([^\"]+)\"")
 LOCALE_ENV_RE = re.compile(r"\.environment\s*\(\s*\\\.locale")
 ID_LANG_RE = re.compile(r"\.id\s*\(\s*.*[Ll]anguage")
+APPLE_LANG_RE = re.compile(r"AppleLanguages")
+APP_L10N_RE = re.compile(r"AppLocalization\.|enum\s+AppLocalization")
 EXPLICIT_LOCALIZED_RE = re.compile(
-    r"String\s*\(\s*localized:|AppLocalization\.|LocalizedStringKey\s*\("
+    r"String\s*\(\s*localized:|LocalizedStringKey\s*\("
 )
+LOCALIZED_KEY_UI_RE = re.compile(
+    r"(?:Text|Toggle|Label|Button)\s*\(\s*\"([a-z][a-z0-9_.]+)\""
+)
+DISPLAY_NAME_RE = re.compile(r"(?:var|func)\s+displayName")
+DATE_FORMATTER_RE = re.compile(r"DateFormatter\s*\(")
+EXPORT_RE = re.compile(r"ExportService|export.*[Ff]ormat|share.*[Tt]ext")
 
 
 def scan_file(path: Path) -> list[Finding]:
@@ -44,6 +52,8 @@ def scan_file(path: Path) -> list[Finding]:
     except OSError as exc:
         findings.append(Finding("WARN", "io", path, 0, str(exc)))
         return findings
+
+    text = "\n".join(lines)
 
     for i, line in enumerate(lines, start=1):
         stripped = line.strip()
@@ -80,31 +90,71 @@ def scan_file(path: Path) -> list[Finding]:
                     "navigation_title_key",
                     path,
                     i,
-                    f"navigationTitle uses key literal '{nav.group(1)}' — may not refresh on in-app language switch",
+                    f"navigationTitle uses key '{nav.group(1)}' — use AppLocalization or verify L1/L3 refresh",
                 )
             )
 
-        tab = TAB_RE.search(line)
-        if tab and tab.lastindex and "." in tab.group(1):
+        ui_key = LOCALIZED_KEY_UI_RE.search(line)
+        if ui_key and "." in ui_key.group(1):
             findings.append(
                 Finding(
                     "INFO",
-                    "tab_title_key",
+                    "localized_string_key_ui",
                     path,
                     i,
-                    f"Tab label uses key literal '{tab.group(1)}' — verify runtime refresh",
+                    f"LocalizedStringKey '{ui_key.group(1)}' — requires AppleLanguages (L1) to follow in-app language",
                 )
             )
+
+        if DISPLAY_NAME_RE.search(line):
+            block = "\n".join(lines[i - 1 : min(i + 8, len(lines))])
+            if CJK_RE.search(block) and "AppLocalization" not in block:
+                findings.append(
+                    Finding(
+                        "WARN",
+                        "display_name_hardcoded",
+                        path,
+                        i,
+                        "displayName may return hardcoded locale-specific text — use AppLocalization + key (L2)",
+                    )
+                )
+
+        if DATE_FORMATTER_RE.search(line):
+            block = "\n".join(lines[i - 1 : min(i + 5, len(lines))])
+            if ".locale" not in block and "resolvedLocale" not in block:
+                findings.append(
+                    Finding(
+                        "INFO",
+                        "date_formatter_locale",
+                        path,
+                        i,
+                        "DateFormatter may use system locale — bind settings.resolvedLocale (L3)",
+                    )
+                )
+
+    if EXPORT_RE.search(text) and APP_L10N_RE.search(text) is None and CJK_RE.search(text):
+        findings.append(
+            Finding(
+                "INFO",
+                "export_without_l10n",
+                path,
+                0,
+                "Export/share formatting may need AppLocalization for dynamic strings (L2)",
+            )
+        )
 
     return findings
 
 
-def scan_project(swift_files: list[Path]) -> list[Finding]:
+def scan_project(swift_files: list[Path], require_in_app: bool) -> list[Finding]:
     """Project-level checks run once across all sources."""
     findings: list[Finding] = []
     has_locale_env = False
     has_id_lang = False
-    has_explicit_l10n = False
+    has_apple_lang = False
+    has_app_l10n = False
+    has_app_language = False
+    has_localized_key_ui = False
 
     for path in swift_files:
         try:
@@ -115,30 +165,71 @@ def scan_project(swift_files: list[Path]) -> list[Finding]:
             has_locale_env = True
         if ID_LANG_RE.search(text):
             has_id_lang = True
-        if EXPLICIT_LOCALIZED_RE.search(text):
-            has_explicit_l10n = True
+        if APPLE_LANG_RE.search(text):
+            has_apple_lang = True
+        if APP_L10N_RE.search(text):
+            has_app_l10n = True
+        if re.search(r"enum\s+AppLanguage|appLanguage", text):
+            has_app_language = True
+        if LOCALIZED_KEY_UI_RE.search(text):
+            has_localized_key_ui = True
 
     root = swift_files[0].parent if swift_files else Path(".")
-    if not has_locale_env and not has_explicit_l10n:
-        findings.append(
-            Finding(
-                "INFO",
-                "missing_locale_environment",
-                root,
-                0,
-                "No .environment(\\.locale) or explicit String(localized:) found — verify if in-app switch is supported",
+
+    if require_in_app or has_app_language:
+        if not has_app_language:
+            findings.append(
+                Finding(
+                    "WARN",
+                    "missing_app_language",
+                    root,
+                    0,
+                    "in_app_switch expected but no AppLanguage enum — only system language will work",
+                )
             )
-        )
-    if not has_id_lang:
-        findings.append(
-            Finding(
-                "INFO",
-                "missing_view_refresh",
-                root,
-                0,
-                "No .id(...Language) found — SwiftUI views may not refresh after language change",
+        if has_localized_key_ui and not has_apple_lang:
+            findings.append(
+                Finding(
+                    "WARN",
+                    "missing_apple_languages",
+                    root,
+                    0,
+                    "Text/Toggle use LocalizedStringKey but AppleLanguages not set — L1 chain incomplete",
+                )
             )
-        )
+        if not has_app_l10n:
+            findings.append(
+                Finding(
+                    "INFO",
+                    "missing_app_localization",
+                    root,
+                    0,
+                    "No AppLocalization helper — dynamic keys (mood/habit/export) may not translate (L2)",
+                )
+            )
+
+    if require_in_app or has_app_language:
+        if not has_locale_env:
+            findings.append(
+                Finding(
+                    "INFO",
+                    "missing_locale_environment",
+                    root,
+                    0,
+                    "No .environment(\\.locale) on root — date/number formatting may be wrong (L3)",
+                )
+            )
+        if not has_id_lang:
+            findings.append(
+                Finding(
+                    "INFO",
+                    "missing_view_refresh",
+                    root,
+                    0,
+                    "No .id(...Language) — nested views may not refresh after language change (L3)",
+                )
+            )
+
     return findings
 
 
@@ -146,6 +237,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source-dir", type=Path, required=True, help="Swift source root (e.g. MyApp/)")
     parser.add_argument("--glob", default="*.swift", help="File glob under source-dir")
+    parser.add_argument(
+        "--require-in-app-switch",
+        action="store_true",
+        help="Stricter checks for in_app_switch projects (AppLanguage, AppleLanguages, etc.)",
+    )
     args = parser.parse_args()
 
     if not args.source_dir.is_dir():
@@ -157,19 +253,19 @@ def main() -> int:
         print(f"No Swift files under {args.source_dir}")
         return 1
 
+    app_files = [p for p in swift_files if "Tests" not in p.parts and "UITests" not in p.parts]
+
     all_findings: list[Finding] = []
-    for path in swift_files:
-        if "Tests" in path.parts or "UITests" in path.parts:
-            continue
+    for path in app_files:
         all_findings.extend(scan_file(path))
 
-    all_findings.extend(scan_project(swift_files))
+    all_findings.extend(scan_project(app_files, args.require_in_app_switch))
 
     warns = [f for f in all_findings if f.severity == "WARN"]
     infos = [f for f in all_findings if f.severity == "INFO"]
 
     print(f"Source: {args.source_dir}")
-    print(f"Scanned: {len(swift_files)} Swift files")
+    print(f"Scanned: {len(app_files)} Swift files")
     print(f"WARN: {len(warns)}  INFO: {len(infos)}\n")
 
     for f in warns + infos:
@@ -178,7 +274,7 @@ def main() -> int:
         print(f"  {f.message}")
 
     if warns:
-        print("\nFix guidance: platforms/ios-swift.md §9, reference.md § 持久化数据本地化")
+        print("\nFix guidance: platforms/ios-swift.md §3.1 & §9 (L1 AppleLanguages, L2 AppLocalization, L3 refresh)")
         return 1
     return 0
 

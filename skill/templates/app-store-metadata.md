@@ -127,8 +127,15 @@
 
 | 检查项 | 状态 | 备注 |
 |--------|------|------|
-| 导航标题随语言刷新 | ☐ | `.id(appLanguage)` + `String(localized:locale:)` |
+| 语言消费模式 | ☐ | `system_only` / `in_app_switch` |
+| 设置页语言选项（跟随系统 + 各 locale） | ☐ | 仅 `in_app_switch` |
+| L1：`AppleLanguages` 已写入 | ☐ | `Text("key")` / `Toggle` |
+| L2：`AppLocalization` 覆盖动态 key | ☐ | 心情、习惯、导出等 |
+| L3：关键子视图 `.id(appLanguage)` | ☐ | 首页、设置、列表 |
+| 日期/数字格式化绑 `resolvedLocale` | ☐ | |
+| 导航标题随语言刷新 | ☐ | |
 | Tab / 核心流程文案随语言刷新 | ☐ | |
 | 持久化数据用 key 非展示文案 | ☐ | 习惯、分类、标签等 |
 | 旧数据 migration | ☐ | 旧 locale 文案 → catalog key |
-| 冷启动 + 切换语言各测一次 | ☐ | |
+| 权限弹窗（默认跟系统） | ☐ | 按需单独处理 InfoPlist |
+| 冷启动 + 切换语言各测一次 | ☐ | 无需改系统语言 |
